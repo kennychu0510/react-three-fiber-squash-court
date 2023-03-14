@@ -1,4 +1,4 @@
-import { Canvas, ThreeElements, useFrame } from '@react-three/fiber';
+import { Canvas, MeshProps, ThreeElements, useFrame } from '@react-three/fiber';
 import React, { useRef, useState } from 'react';
 import { Html, OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import { BackSide, BufferGeometry, DoubleSide, FrontSide, Shape, Vector3 } from 'three';
@@ -20,9 +20,12 @@ function Box(props: ThreeElements['mesh']) {
   );
 }
 
-function Floor() {
+interface FloorProps extends MeshProps {
+  color: string
+}
+function Floor({ position, scale, color, ...props }: FloorProps) {
   return (
-    <mesh position={[0, 0, 0]} rotation={[Math.PI / 2, 0, 0]} scale={[COURT_WIDTH, COURT_LENGTH, 1]}>
+    <mesh position={position} rotation={[Math.PI / 2, 0, 0]} scale={scale} {...props}>
       {/*
         The thing that gives the mesh its shape
         In this case the shape is a flat plane
@@ -32,7 +35,7 @@ function Floor() {
         The material gives a mesh its texture or look.
         In this case, it is just a uniform green
       */}
-      <meshBasicMaterial color='white' side={DoubleSide} />
+      <meshBasicMaterial color={color} side={DoubleSide} />
     </mesh>
   );
 }
@@ -54,9 +57,9 @@ function Wall({ position, scale, rotate }: { position: Vector3; scale: Vector3; 
   );
 }
 
-function FrontWall() {
+function FrontWall({ position, scale, color }: { position: number[]; scale: number[]; color: string }) {
   return (
-    <mesh position={[0, COURT_HEIGHT / 2, -COURT_LENGTH / 2]} rotation={[0, 0, 0]} scale={[COURT_WIDTH, COURT_HEIGHT, 0]}>
+    <mesh position={new Vector3(...position)} rotation={[0, 0, 0]} scale={new Vector3(...scale)}>
       {/*
         The thing that gives the mesh its shape
         In this case the shape is a flat plane
@@ -66,7 +69,7 @@ function FrontWall() {
         The material gives a mesh its texture or look.
         In this case, it is just a uniform green
       */}
-      <meshBasicMaterial color='white' side={DoubleSide} attach={'material'} />
+      <meshBasicMaterial color={color} side={FrontSide} attach={'material'} />
     </mesh>
   );
 }
@@ -99,6 +102,23 @@ function Truss1() {
   );
 }
 
+function Diagonal({ position, scale, rotate, angle }: { position: Vector3; scale: Vector3; rotate?: boolean; angle: number }) {
+  return (
+    <mesh position={position} rotation={[0, rotate ? Math.PI * 1.5 : Math.PI / 2, angle]} scale={scale}>
+      {/*
+        The thing that gives the mesh its shape
+        In this case the shape is a flat plane
+      */}
+      <planeBufferGeometry />
+      {/*
+        The material gives a mesh its texture or look.
+        In this case, it is just a uniform green
+      */}
+      <meshBasicMaterial color='red' side={BackSide} />
+    </mesh>
+  );
+}
+
 type LineProps = {
   start: number[];
   end: number[];
@@ -121,20 +141,50 @@ function Line(props: LineProps) {
   );
 }
 
-export default function Three() {
+export default function Three({ text, setText }: { text: string; setText: React.Dispatch<React.SetStateAction<string>> }) {
   return (
     <Canvas style={{ height: '100vh' }}>
       <ambientLight />
       <PerspectiveCamera position={[0, 15, 15]} makeDefault />
       <pointLight position={[20, 0, 20]} intensity={1.5} />
-      <Floor />
+      <Floor position={[0, 0, 0]} scale={[COURT_WIDTH, COURT_LENGTH, 1]} color='white' />
+
+      {/* LEFT WALL */}
       <Wall position={new Vector3(-COURT_WIDTH / 2, COURT_HEIGHT / 2, 0)} scale={new Vector3(COURT_LENGTH, COURT_HEIGHT, 0)} rotate />
+      <Wall position={new Vector3(-COURT_WIDTH / 2, 4.57, 0)} scale={new Vector3(COURT_LENGTH, 2, 0)} rotate />
+
+      {/* RIGHT WALL */}
       <Wall position={new Vector3(COURT_WIDTH / 2, COURT_HEIGHT / 2, 0)} scale={new Vector3(COURT_LENGTH, COURT_HEIGHT, 0)} />
-      <Line start={[-COURT_WIDTH / 2, 0, 0]} end={[COURT_WIDTH / 2, 0, 0]} color={'red'} />
-      <Line start={[0, 0, 0]} end={[0, 0, COURT_LENGTH / 2]} color={'red'} />
+      <Wall position={new Vector3(COURT_WIDTH / 2, 4.57, 0)} scale={new Vector3(COURT_LENGTH, 2, 0)} />
+
+      <FrontWall position={[0, COURT_HEIGHT / 2, -COURT_LENGTH / 2]} scale={[COURT_WIDTH, COURT_HEIGHT, 0]} color={'white'} />
+      <FrontWall position={[0, 4.57, -COURT_LENGTH / 2]} scale={[COURT_WIDTH, 2, 0]} color={'white'} />
+
+      <Diagonal position={new Vector3(COURT_WIDTH / 2 - 0.005, COURT_HEIGHT - 2.44 / 2, 0)} scale={new Vector3(10.05, 0.05, 0)} angle={Math.atan(2.44 / 9.75)} />
+      <Diagonal position={new Vector3(-COURT_WIDTH / 2 + 0.005, COURT_HEIGHT - 2.44 / 2, 0)} scale={new Vector3(10.05, 0.05, 0)} angle={-Math.atan(2.44 / 9.75)} rotate />
+
+      {/* Short line */}
+      <Floor position={[0, 0.002, COURT_LENGTH / 2 - 4.26]} scale={[COURT_WIDTH, 0.05, 0]} color={'red'} onClick={() => setText('Short Line')}/>
+
+      {/* Half line */}
+      <Floor position={new Vector3(0, 0.002, (COURT_LENGTH - 4.26) / 2)} scale={[0.05, 4.26, 0]} color={'red'} />
+
+      {/* Left Box */}
+      <Floor position={[-(COURT_WIDTH - 1.6) / 2, 0.002, COURT_LENGTH / 2 - (4.26 - 1.6)]} scale={[1.6, 0.05, 0]} color={'red'} />
+      <Floor position={[-(COURT_WIDTH - 3.2) / 2, 0.002, COURT_LENGTH / 2 - (4.26 - 0.8)]} scale={[0.05, 1.65, 0]} color={'red'} />
+
+      {/* Right Box */}
+      <Floor position={[(COURT_WIDTH - 1.6) / 2, 0.002, COURT_LENGTH / 2 - (4.26 - 1.6)]} scale={[1.6, 0.05, 0]} color={'red'} />
+      <Floor position={[(COURT_WIDTH - 3.2) / 2, 0.002, COURT_LENGTH / 2 - (4.26 - 0.8)]} scale={[0.05, 1.65, 0]} color={'red'} />
 
       {/* TIN */}
-      <Line start={[-COURT_WIDTH / 2, 0.48, -COURT_LENGTH / 2]} end={[COURT_WIDTH / 2, 0.48, -COURT_LENGTH / 2]} color={'red'} />
+      <FrontWall position={[0, 0.48, -COURT_LENGTH / 2 + 0.005]} scale={[COURT_WIDTH, 0.05, 0]} color={'red'} />
+
+      {/* Serving Line */}
+      <FrontWall position={[0, 1.83, -COURT_LENGTH / 2 + 0.005]} scale={[COURT_WIDTH, 0.05, 0]} color={'red'} />
+
+      {/* Out Line */}
+      <FrontWall position={[0, 4.57, -COURT_LENGTH / 2 + 0.005]} scale={[COURT_WIDTH, 0.05, 0]} color={'red'} />
 
       {/* LEFT EDGE */}
       <Line start={[-COURT_WIDTH / 2, 0.002, -COURT_LENGTH / 2]} end={[-COURT_WIDTH / 2, 0.002, COURT_LENGTH / 2]} color={'black'} />
@@ -147,12 +197,11 @@ export default function Three() {
 
       {/* FRONT LEFT CORNER EDGE */}
       <Line start={[-COURT_WIDTH / 2 + 0.002, 0.002, -COURT_LENGTH / 2 + 0.002]} end={[-COURT_WIDTH / 2 + 0.002, COURT_HEIGHT, -COURT_LENGTH / 2 + 0.002]} color={'black'} />
-      
+
       {/* FRONT RIGHT CORNER EDGE */}
       <Line start={[COURT_WIDTH / 2 - 0.002, 0.002, -COURT_LENGTH / 2 + 0.002]} end={[COURT_WIDTH / 2 - 0.002, COURT_HEIGHT, -COURT_LENGTH / 2 + 0.002]} color={'black'} />
 
-      <FrontWall />
-      <OrbitControls />
+      <OrbitControls position={[0, 10, 0]} />
     </Canvas>
   );
 }
