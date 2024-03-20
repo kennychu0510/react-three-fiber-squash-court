@@ -1,7 +1,10 @@
-import { Canvas, MeshProps, ThreeElements, useFrame } from '@react-three/fiber';
-import React, { useRef, useState } from 'react';
+import { Canvas, Euler, MeshProps, ThreeElements, useFrame } from '@react-three/fiber';
+import React, { useEffect, useRef, useState } from 'react';
 import { Html, OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import { BackSide, BufferGeometry, DoubleSide, FrontSide, Shape, Vector3 } from 'three';
+import { Text } from '@react-three/drei';
+import styles from './Three.module.css';
+import TWEEN from '@tweenjs/tween.js';
 
 const COURT_WIDTH = 6.4;
 const COURT_LENGTH = 9.75;
@@ -21,7 +24,7 @@ function Box(props: ThreeElements['mesh']) {
 }
 
 interface FloorProps extends MeshProps {
-  color: string
+  color: string;
 }
 function Floor({ position, scale, color, ...props }: FloorProps) {
   return (
@@ -30,14 +33,24 @@ function Floor({ position, scale, color, ...props }: FloorProps) {
         The thing that gives the mesh its shape
         In this case the shape is a flat plane
       */}
-      <planeBufferGeometry />
+      <planeBufferGeometry attach={'geometry'} />
       {/*
         The material gives a mesh its texture or look.
         In this case, it is just a uniform green
       */}
-      <meshBasicMaterial color={color} side={DoubleSide} />
+      <meshBasicMaterial color={color} side={DoubleSide} attach='material' />
     </mesh>
   );
+}
+
+function FloorText({ position, text, showLabels, fontSize, rotation }: { position: number[]; text: string; showLabels: boolean, fontSize?: number, rotation?: Euler  }) {
+  if (!showLabels) return null;
+  return (
+    <Text textAlign='center' position={new Vector3(...position)} rotation={rotation ?? [-Math.PI / 2, 0, 0]} fontSize={fontSize ?? 0.5} color={'black'}>
+      {text}
+    </Text>
+  );
+
 }
 
 function Wall({ position, scale, rotate }: { position: Vector3; scale: Vector3; rotate?: boolean }) {
@@ -60,45 +73,19 @@ function Wall({ position, scale, rotate }: { position: Vector3; scale: Vector3; 
 function FrontWall({ position, scale, color }: { position: number[]; scale: number[]; color: string }) {
   return (
     <mesh position={new Vector3(...position)} rotation={[0, 0, 0]} scale={new Vector3(...scale)}>
-      {/*
-        The thing that gives the mesh its shape
-        In this case the shape is a flat plane
-      */}
-      <planeBufferGeometry />
-      {/*
-        The material gives a mesh its texture or look.
-        In this case, it is just a uniform green
-      */}
+      <planeBufferGeometry attach={'geometry'} />
       <meshBasicMaterial color={color} side={FrontSide} attach={'material'} />
     </mesh>
   );
 }
 
-function Truss1() {
-  var length = 14,
-    width = 2,
-    deg = 10,
-    thickness = 0.3;
-  var rad = (deg * Math.PI) / 180;
-  var offset = Math.min(Math.tan(rad) * width, length / 2);
-  var shape = new Shape();
-  shape.moveTo(0, 0);
-  shape.lineTo(offset, width);
-  shape.lineTo(length - offset, width);
-  shape.lineTo(length, 0);
-  shape.lineTo(0, 0);
-  const extrudeSettings = {
-    curveSegments: 1,
-    steps: 1,
-    depth: thickness,
-    bevelEnabled: false,
-  };
-
+function WallText({ position, text, showLabels, isSide, rotate, fontSize }: { position: number[]; text: string; showLabels: boolean, isSide?: boolean, rotate?: boolean, fontSize?: number }) {
+  if (!showLabels) return null;
+  const rotateY = isSide ? (rotate ? -Math.PI * 1.5 : -Math.PI / 2 ) : 0
   return (
-    <mesh>
-      <extrudeBufferGeometry attach='geometry' args={[shape, extrudeSettings]} />
-      <meshStandardMaterial color='red' side={DoubleSide} />
-    </mesh>
+    <Text rotation={[0, rotateY, 0]}  position={new Vector3(...position)} fontSize={fontSize ?? 0.5} color={'black'}>
+      {text}
+    </Text>
   );
 }
 
@@ -109,12 +96,12 @@ function Diagonal({ position, scale, rotate, angle }: { position: Vector3; scale
         The thing that gives the mesh its shape
         In this case the shape is a flat plane
       */}
-      <planeBufferGeometry />
+      <planeBufferGeometry attach={'geometry'} />
       {/*
         The material gives a mesh its texture or look.
         In this case, it is just a uniform green
       */}
-      <meshBasicMaterial color='red' side={BackSide} />
+      <meshBasicMaterial color='red' side={BackSide} attach='material' />
     </mesh>
   );
 }
@@ -141,67 +128,106 @@ function Line(props: LineProps) {
   );
 }
 
-export default function Three({ text, setText }: { text: string; setText: React.Dispatch<React.SetStateAction<string>> }) {
+function Tween() {
+  useFrame(() => {
+    TWEEN.update();
+  });
+  return null;
+}
+
+export default function Three() {
+  const PerspectiveCameraRef = useRef<THREE.PerspectiveCamera>(null);
+  const [showLabels, setShowLabels] = useState(false);
+
+  function onResetCamera() {
+    if (PerspectiveCameraRef.current) {
+      new TWEEN.Tween(PerspectiveCameraRef.current.position)
+        .to({ x: 0, y: 15, z: 15 }, 1000)
+        .easing(TWEEN.Easing.Quadratic.InOut) // Add easing for smoother animation
+        .start();
+    }
+  }
+
+  function onShowLabels() {
+    setShowLabels(!showLabels);
+  }
   return (
-    <Canvas style={{ height: '100vh' }}>
-      <ambientLight />
-      <PerspectiveCamera position={[0, 15, 15]} makeDefault />
-      <pointLight position={[20, 0, 20]} intensity={1.5} />
-      <Floor position={[0, 0, 0]} scale={[COURT_WIDTH, COURT_LENGTH, 1]} color='white' />
+    <>
+      <Canvas style={{ height: '100dvh' }}>
+        <ambientLight />
+        <PerspectiveCamera ref={PerspectiveCameraRef} position={[0, 15, 15]} makeDefault />
+        <pointLight position={[20, 0, 20]} intensity={1.5} />
+        <Floor position={[0, 0, 0]} scale={[COURT_WIDTH, COURT_LENGTH, 1]} color='white' />
 
-      {/* LEFT WALL */}
-      <Wall position={new Vector3(-COURT_WIDTH / 2, COURT_HEIGHT / 2, 0)} scale={new Vector3(COURT_LENGTH, COURT_HEIGHT, 0)} rotate />
-      <Wall position={new Vector3(-COURT_WIDTH / 2, 4.57, 0)} scale={new Vector3(COURT_LENGTH, 2, 0)} rotate />
+        {/* LEFT WALL */}
+        <Wall position={new Vector3(-COURT_WIDTH / 2, COURT_HEIGHT / 2, 0)} scale={new Vector3(COURT_LENGTH, COURT_HEIGHT, 0)} rotate />
+        <WallText position={[-COURT_WIDTH / 2 + 0.002, COURT_HEIGHT / 2, 0]} text={'SIDE WALL (LEFT)'} showLabels={showLabels} isSide={true} rotate />
+        <Wall position={new Vector3(-COURT_WIDTH / 2, 4.57, 0)} scale={new Vector3(COURT_LENGTH, 2, 0)} rotate />
 
-      {/* RIGHT WALL */}
-      <Wall position={new Vector3(COURT_WIDTH / 2, COURT_HEIGHT / 2, 0)} scale={new Vector3(COURT_LENGTH, COURT_HEIGHT, 0)} />
-      <Wall position={new Vector3(COURT_WIDTH / 2, 4.57, 0)} scale={new Vector3(COURT_LENGTH, 2, 0)} />
+        {/* RIGHT WALL */}
+        <Wall position={new Vector3(COURT_WIDTH / 2, COURT_HEIGHT / 2, 0)} scale={new Vector3(COURT_LENGTH, COURT_HEIGHT, 0)} />
+        <WallText position={[COURT_WIDTH / 2 - 0.002, COURT_HEIGHT / 2, 0]} text={'SIDE WALL (RIGHT)'} showLabels={showLabels} isSide={true}  />
+        <Wall position={new Vector3(COURT_WIDTH / 2, 4.57, 0)} scale={new Vector3(COURT_LENGTH, 2, 0)} />
 
-      <FrontWall position={[0, COURT_HEIGHT / 2, -COURT_LENGTH / 2]} scale={[COURT_WIDTH, COURT_HEIGHT, 0]} color={'white'} />
-      <FrontWall position={[0, 4.57, -COURT_LENGTH / 2]} scale={[COURT_WIDTH, 2, 0]} color={'white'} />
+        <FrontWall position={[0, COURT_HEIGHT / 2, -COURT_LENGTH / 2]} scale={[COURT_WIDTH, COURT_HEIGHT, 0]} color={'white'} />
+        <WallText position={[0, COURT_HEIGHT / 2 + 1, -COURT_LENGTH / 2 + 0.002]} text={'FRONT WALL'} showLabels={showLabels} />
 
-      <Diagonal position={new Vector3(COURT_WIDTH / 2 - 0.005, COURT_HEIGHT - 2.44 / 2, 0)} scale={new Vector3(10.05, 0.05, 0)} angle={Math.atan(2.44 / 9.75)} />
-      <Diagonal position={new Vector3(-COURT_WIDTH / 2 + 0.005, COURT_HEIGHT - 2.44 / 2, 0)} scale={new Vector3(10.05, 0.05, 0)} angle={-Math.atan(2.44 / 9.75)} rotate />
+        <FrontWall position={[0, 4.57, -COURT_LENGTH / 2]} scale={[COURT_WIDTH, 2, 0]} color={'white'} />
 
-      {/* Short line */}
-      <Floor position={[0, 0.002, COURT_LENGTH / 2 - 4.26]} scale={[COURT_WIDTH, 0.05, 0]} color={'red'} onClick={() => setText('Short Line')}/>
+        <Diagonal position={new Vector3(COURT_WIDTH / 2 - 0.005, COURT_HEIGHT - 2.44 / 2, 0)} scale={new Vector3(10.05, 0.05, 0)} angle={Math.atan(2.44 / 9.75)} />
+        <Diagonal position={new Vector3(-COURT_WIDTH / 2 + 0.005, COURT_HEIGHT - 2.44 / 2, 0)} scale={new Vector3(10.05, 0.05, 0)} angle={-Math.atan(2.44 / 9.75)} rotate />
 
-      {/* Half line */}
-      <Floor position={new Vector3(0, 0.002, (COURT_LENGTH - 4.26) / 2)} scale={[0.05, 4.26, 0]} color={'red'} />
+        {/* Short line */}
+        <Floor position={[0, 0.002, COURT_LENGTH / 2 - 4.26]} scale={[COURT_WIDTH, 0.05, 0]} color={'red'} />
+        <FloorText position={[0, 0.002, COURT_LENGTH / 2 - 4.5]} fontSize={0.3} text={'SHORT LINE'} showLabels={showLabels}/>
 
-      {/* Left Box */}
-      <Floor position={[-(COURT_WIDTH - 1.6) / 2, 0.002, COURT_LENGTH / 2 - (4.26 - 1.6)]} scale={[1.6, 0.05, 0]} color={'red'} />
-      <Floor position={[-(COURT_WIDTH - 3.2) / 2, 0.002, COURT_LENGTH / 2 - (4.26 - 0.8)]} scale={[0.05, 1.65, 0]} color={'red'} />
+        {/* Half line */}
+        <Floor position={new Vector3(0, 0.002, (COURT_LENGTH - 4.26) / 2)} scale={[0.05, 4.26, 0]} color={'red'} />
+        <FloorText position={[-0.15, 0.002, (COURT_LENGTH - 4.26) / 2]} fontSize={0.3} text={'HALF COURT LINE'} showLabels={showLabels} rotation={[-Math.PI / 2, 0, Math.PI /2]}/>
 
-      {/* Right Box */}
-      <Floor position={[(COURT_WIDTH - 1.6) / 2, 0.002, COURT_LENGTH / 2 - (4.26 - 1.6)]} scale={[1.6, 0.05, 0]} color={'red'} />
-      <Floor position={[(COURT_WIDTH - 3.2) / 2, 0.002, COURT_LENGTH / 2 - (4.26 - 0.8)]} scale={[0.05, 1.65, 0]} color={'red'} />
+        {/* Left Box */}
+        <Floor position={[-(COURT_WIDTH - 1.6) / 2, 0.002, COURT_LENGTH / 2 - (4.26 - 1.6)]} scale={[1.6, 0.05, 0]} color={'red'} />
+        <Floor position={[-(COURT_WIDTH - 3.2) / 2, 0.002, COURT_LENGTH / 2 - (4.26 - 0.8)]} scale={[0.05, 1.65, 0]} color={'red'} />
+        <FloorText position={[-(COURT_WIDTH - 1.6) / 2, 0.003, COURT_LENGTH / 2 - (4.26 - 0.8)]} fontSize={0.3} text={'SERVICE\nBOX'} showLabels={showLabels}/>
 
-      {/* TIN */}
-      <FrontWall position={[0, 0.48, -COURT_LENGTH / 2 + 0.005]} scale={[COURT_WIDTH, 0.05, 0]} color={'red'} />
+        {/* Right Box */}
+        <Floor position={[(COURT_WIDTH - 1.6) / 2, 0.002, COURT_LENGTH / 2 - (4.26 - 1.6)]} scale={[1.6, 0.05, 0]} color={'red'} />
+        <Floor position={[(COURT_WIDTH - 3.2) / 2, 0.002, COURT_LENGTH / 2 - (4.26 - 0.8)]} scale={[0.05, 1.65, 0]} color={'red'} />
+        <FloorText position={[(COURT_WIDTH - 1.6) / 2, 0.003, COURT_LENGTH / 2 - (4.26 - 0.8)]} fontSize={0.3} text={'SERVICE\nBOX'} showLabels={showLabels}/>
 
-      {/* Serving Line */}
-      <FrontWall position={[0, 1.83, -COURT_LENGTH / 2 + 0.005]} scale={[COURT_WIDTH, 0.05, 0]} color={'red'} />
+        {/* TIN */}
+        <FrontWall position={[0, 0.48, -COURT_LENGTH / 2 + 0.005]} scale={[COURT_WIDTH, 0.05, 0]} color={'red'} />
+        <WallText position={[0, 0.6, -COURT_LENGTH / 2 + 0.005]} text={'TIN'} showLabels={showLabels} fontSize={0.3} />
 
-      {/* Out Line */}
-      <FrontWall position={[0, 4.57, -COURT_LENGTH / 2 + 0.005]} scale={[COURT_WIDTH, 0.05, 0]} color={'red'} />
+        {/* Serving Line */}
+        <FrontWall position={[0, 1.83, -COURT_LENGTH / 2 + 0.005]} scale={[COURT_WIDTH, 0.05, 0]} color={'red'} />
+        <WallText position={[0, 2, -COURT_LENGTH / 2 + 0.005]} text={'SERVICE LINE'} showLabels={showLabels} fontSize={0.3} />
 
-      {/* LEFT EDGE */}
-      <Line start={[-COURT_WIDTH / 2, 0.002, -COURT_LENGTH / 2]} end={[-COURT_WIDTH / 2, 0.002, COURT_LENGTH / 2]} color={'black'} />
+        {/* Out Line */}
+        <FrontWall position={[0, 4.57, -COURT_LENGTH / 2 + 0.005]} scale={[COURT_WIDTH, 0.05, 0]} color={'red'} />
 
-      {/* FRONT EDGE */}
-      <Line start={[-COURT_WIDTH / 2, 0.002, -COURT_LENGTH / 2]} end={[COURT_WIDTH / 2, 0.002, -COURT_LENGTH / 2]} color={'black'} />
+        {/* LEFT EDGE */}
+        <Line start={[-COURT_WIDTH / 2, 0.002, -COURT_LENGTH / 2]} end={[-COURT_WIDTH / 2, 0.002, COURT_LENGTH / 2]} color={'black'} />
 
-      {/* RIGHT EDGE */}
-      <Line start={[COURT_WIDTH / 2, 0.002, COURT_LENGTH / 2]} end={[COURT_WIDTH / 2, 0.002, -COURT_LENGTH / 2]} color={'black'} />
+        {/* FRONT EDGE */}
+        <Line start={[-COURT_WIDTH / 2, 0.002, -COURT_LENGTH / 2]} end={[COURT_WIDTH / 2, 0.002, -COURT_LENGTH / 2]} color={'black'} />
 
-      {/* FRONT LEFT CORNER EDGE */}
-      <Line start={[-COURT_WIDTH / 2 + 0.002, 0.002, -COURT_LENGTH / 2 + 0.002]} end={[-COURT_WIDTH / 2 + 0.002, COURT_HEIGHT, -COURT_LENGTH / 2 + 0.002]} color={'black'} />
+        {/* RIGHT EDGE */}
+        <Line start={[COURT_WIDTH / 2, 0.002, COURT_LENGTH / 2]} end={[COURT_WIDTH / 2, 0.002, -COURT_LENGTH / 2]} color={'black'} />
 
-      {/* FRONT RIGHT CORNER EDGE */}
-      <Line start={[COURT_WIDTH / 2 - 0.002, 0.002, -COURT_LENGTH / 2 + 0.002]} end={[COURT_WIDTH / 2 - 0.002, COURT_HEIGHT, -COURT_LENGTH / 2 + 0.002]} color={'black'} />
+        {/* FRONT LEFT CORNER EDGE */}
+        <Line start={[-COURT_WIDTH / 2 + 0.002, 0.002, -COURT_LENGTH / 2 + 0.002]} end={[-COURT_WIDTH / 2 + 0.002, COURT_HEIGHT, -COURT_LENGTH / 2 + 0.002]} color={'black'} />
 
-      <OrbitControls position={[0, 10, 0]} />
-    </Canvas>
+        {/* FRONT RIGHT CORNER EDGE */}
+        <Line start={[COURT_WIDTH / 2 - 0.002, 0.002, -COURT_LENGTH / 2 + 0.002]} end={[COURT_WIDTH / 2 - 0.002, COURT_HEIGHT, -COURT_LENGTH / 2 + 0.002]} color={'black'} />
+
+        <OrbitControls position={[0, 10, 0]} />
+        <Tween />
+      </Canvas>
+      <div className={styles.ButtonContainer}>
+        <button onClick={onShowLabels}>{showLabels ? 'Hide Labels' : 'Show Labels'}</button>
+        <button onClick={onResetCamera}>Reset Camera</button>
+      </div>
+    </>
   );
 }
