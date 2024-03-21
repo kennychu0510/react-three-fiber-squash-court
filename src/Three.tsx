@@ -11,19 +11,6 @@ const COURT_WIDTH = 6.4;
 const COURT_LENGTH = 9.75;
 const COURT_HEIGHT = 4.57;
 
-function Box(props: ThreeElements['mesh']) {
-  const mesh = useRef<THREE.Mesh>(null!);
-  const [hovered, setHover] = useState(false);
-  const [active, setActive] = useState(false);
-  useFrame((state, delta) => (mesh.current.rotation.x += delta));
-  return (
-    <mesh {...props} ref={mesh} scale={active ? 1.5 : 1} onClick={(event) => setActive(!active)} onPointerOver={(event) => setHover(true)} onPointerOut={(event) => setHover(false)}>
-      <boxGeometry args={[1, 1, 1]} />
-      <meshStandardMaterial color={hovered ? 'hotpink' : 'orange'} />
-    </mesh>
-  );
-}
-
 interface FloorProps extends MeshProps {
   color: string;
 }
@@ -88,15 +75,15 @@ function BackWall({ position, scale, color }: { position: number[]; scale: numbe
   );
 }
 
-function WallText({ position, text, showLabels, isSide, rotate, fontSize }: { position: number[]; text: string; showLabels: boolean; isSide?: boolean; rotate?: boolean; fontSize?: number }) {
-  if (!showLabels) return null;
-  const rotateY = isSide ? (rotate ? -Math.PI * 1.5 : -Math.PI / 2) : 0;
+const WallText = React.forwardRef<THREE.Mesh, { position: number[]; text: string; showLabels: boolean; isSide?: boolean; rotate?: boolean; fontSize?: number }>((props, ref) => {
+  if (!props.showLabels) return null;
+  const rotateY = props.isSide ? (props.rotate ? -Math.PI * 1.5 : -Math.PI / 2) : 0;
   return (
-    <Text rotation={[0, rotateY, 0]} position={new Vector3(...position)} fontSize={fontSize ?? 0.5} color={'black'}>
-      {text}
+    <Text fillOpacity={0} rotation={[0, rotateY, 0]} position={new Vector3(...props.position)} fontSize={props.fontSize ?? 0.5} color={'black'} ref={ref}>
+      {props.text}
     </Text>
   );
-}
+});
 
 function Diagonal({ position, scale, rotate, angle }: { position: Vector3; scale: Vector3; rotate?: boolean; angle: number }) {
   return (
@@ -156,9 +143,9 @@ function Tween() {
 export default function Three() {
   const PerspectiveCameraRef = useRef<THREE.PerspectiveCamera>(null);
   const BallRef = useRef<THREE.Mesh>(null);
-  const driveTypeRef = useRef<HTMLSelectElement>(null);
-  const [ballPosition, setBallPosition] = useState(new Vector3(0, 0, 0));
+  const [ballPosition, setBallPosition] = useState(new Vector3(0, 1000, 0));
 
+  const [driveType, setDriveType] = useState('Forehand');
   const [showLabels, setShowLabels] = useState(false);
 
   function onResetCamera() {
@@ -231,21 +218,60 @@ export default function Three() {
     initBall.start();
   }
 
+  function forehandServe() {
+    if (!BallRef.current) return;
+    const initBall = new TWEEN.Tween(BallRef.current.position).to({ x: (COURT_WIDTH - 1.6) / 2, y: 1, z: COURT_LENGTH / 2 - 4 }, 0);
+    const hideFrontWall = new TWEEN.Tween(BallRef.current.position).to({ x: 0, y: 4, z: -COURT_LENGTH / 2 + BALL_SIZE }, 1000).easing(TWEEN.Easing.Quadratic.InOut).delay(500);
+    const hitSideWall = new TWEEN.Tween(BallRef.current.position)
+      .to({ x: -COURT_WIDTH / 2 + BALL_SIZE, y: 2, z: COURT_LENGTH / 2 - 2 }, 1000)
+      .easing(TWEEN.Easing.Quadratic.InOut)
+    const hideFloor = new TWEEN.Tween(BallRef.current.position).to({ x: -COURT_WIDTH / 2 + 1, y: BALL_SIZE, z: COURT_LENGTH / 2 - BALL_SIZE }, 700).easing(TWEEN.Easing.Quadratic.InOut);
+
+    initBall.chain(hideFrontWall);
+    hideFrontWall.chain(hitSideWall);
+    hitSideWall.chain(hideFloor);
+    initBall.start();
+  }
+
+  function backhandServe() {
+    if (!BallRef.current) return;
+    const initBall = new TWEEN.Tween(BallRef.current.position).to({ x: -(COURT_WIDTH - 1.6) / 2, y: 1, z: COURT_LENGTH / 2 - 4 }, 0);
+    const hideFrontWall = new TWEEN.Tween(BallRef.current.position).to({ x: 0, y: 4, z: -COURT_LENGTH / 2 + BALL_SIZE }, 1000).easing(TWEEN.Easing.Quadratic.InOut).delay(500);
+    const hitSideWall = new TWEEN.Tween(BallRef.current.position)
+      .to({ x: COURT_WIDTH / 2 - BALL_SIZE, y: 2, z: COURT_LENGTH / 2 - 2 }, 1000)
+      .easing(TWEEN.Easing.Quadratic.InOut)
+    const hideFloor = new TWEEN.Tween(BallRef.current.position).to({ x: COURT_WIDTH / 2 - 1, y: BALL_SIZE, z: COURT_LENGTH / 2 - BALL_SIZE }, 700).easing(TWEEN.Easing.Quadratic.InOut);
+
+    initBall.chain(hideFrontWall);
+    hideFrontWall.chain(hitSideWall);
+    hitSideWall.chain(hideFloor);
+    initBall.start();
+  }
+
   function onPressStraight() {
-    const type = driveTypeRef.current?.value;
-    if (!type) return;
-    type === 'Forehand' ? forehandDrive() : backhandDrive();
+    driveType === 'Forehand' ? forehandDrive() : backhandDrive();
   }
 
   function onPressBoast() {
-    const type = driveTypeRef.current?.value;
-    if (!type) return;
-    type === 'Forehand' ? forehandBoast() : backhandBoast();
+    driveType === 'Forehand' ? forehandBoast() : backhandBoast();
+  }
+
+  function onPressServe() {
+    driveType === 'Forehand' ? forehandServe() : backhandServe();
   }
 
   function onShowLabels() {
     setShowLabels(!showLabels);
   }
+
+  function onForehandPress() {
+    setDriveType('Forehand');
+  }
+
+  function onBackhandPress() {
+    setDriveType('Backhand');
+  }
+
   return (
     <>
       <Canvas style={{ height: '100dvh' }}>
@@ -265,6 +291,7 @@ export default function Three() {
         <WallText position={[COURT_WIDTH / 2 - 0.002, COURT_HEIGHT / 2, 0]} text={'SIDE WALL (RIGHT)'} showLabels={showLabels} isSide={true} />
         <Wall position={new Vector3(COURT_WIDTH / 2, 4.57, 0)} scale={new Vector3(COURT_LENGTH, 2, 0)} />
 
+        {/* FRONT WALL */}
         <FrontWall position={[0, COURT_HEIGHT / 2, -COURT_LENGTH / 2]} scale={[COURT_WIDTH, COURT_HEIGHT, 0]} color={'white'} />
         <WallText position={[0, COURT_HEIGHT / 2 + 1, -COURT_LENGTH / 2 + 0.002]} text={'FRONT WALL'} showLabels={showLabels} />
         <FrontWall position={[0, 4.57, -COURT_LENGTH / 2]} scale={[COURT_WIDTH, 2, 0]} color={'white'} />
@@ -327,17 +354,20 @@ export default function Three() {
         <Tween />
       </Canvas>
       <div className={styles.ButtonContainer}>
-        <select ref={driveTypeRef}>
-          <option>{'Forehand'}</option>
-          <option>{'Backhand'}</option>
-        </select>
+        <div className={styles.row}>
+          <button className={driveType === 'Forehand' ? styles.active : ''} onClick={onForehandPress}>{'Forehand'}</button>
+          <button className={driveType === 'Backhand' ? styles.active : ''} onClick={onBackhandPress}>{'Backhand'}</button>
+        </div>
         <div className={styles.row}>
           <button onClick={onPressStraight}>{'Straight'}</button>
           <button onClick={onPressBoast}>{'Boast'}</button>
         </div>
         <div className={styles.row}>
+          <button onClick={onPressServe}>{'Serve'}</button>
           <button onClick={onShowLabels}>{showLabels ? 'Hide Labels' : 'Show Labels'}</button>
-          <button onClick={onResetCamera}>Reset</button>
+        </div>
+        <div className={styles.row}>
+          <button style={{width: '100%'}} onClick={onResetCamera}>Reset</button>
         </div>
       </div>
     </>
